@@ -27,7 +27,7 @@ pub fn next(src: &mut &str) -> Option<char> {
 /// Applies the provided function to a copy of the given string, returning the
 /// result.
 pub fn peek<T, F: Fn(&mut &str) -> T>(src: &&str, function: F) -> T {
-    let copy = &mut src.clone();
+    let copy = &mut &src[..];
     let result = function(copy);
     return result;
 }
