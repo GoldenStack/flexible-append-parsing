@@ -1,12 +1,15 @@
+use std::fmt::Display;
+
 use context::Context;
 
 pub mod context;
 
 
 fn main() {
-    let src = &mut "-a.b";
+    // let src = &mut "@a,q.b";
+    let src = &mut "@a.b";
 
-    println!("{:?}", parse(src));
+    println!("{}", parse(src).unwrap());
 }
 
 /// Returns the value of the leftmost node in an expression. This is possible
@@ -29,6 +32,36 @@ pub fn parse_prefix(mut left: Expr, input: &mut &str) -> Result<Expr> {
         let Ok(right) = token(input) else {
             return Ok(left);
         };
+
+        println!("infix: {} {}", right, Context::standard().is_infix(&right));
+        println!("   left [{}]", left);
+        if let Ok(next) = peek(input, token) {
+            if Context::standard().is_infix(&next) {
+                println!("   next is infix: {} {}", next, Context::standard().is_infix(&next));
+                token(input)?;
+
+                // true faith
+                let new_order = Context::standard().get_associativity(leftmost(&left), &next, input)?;
+
+                // left right next
+
+                println!("beep {} {} {:?}", leftmost(&left), &next, new_order);
+
+                // LEFT: - ((. a) MORE)
+                // RIGHT: (. (- a)) MORE
+
+                return Ok(match new_order {
+                    Associativity::Right => {
+                        Expr::App(Box::new(left), Box::new(
+                            parse_prefix(Expr::App(Box::new(Expr::Name(next)), Box::new(Expr::Name(right))), input)?
+                        ))
+                    },
+                    Associativity::Left => {
+                        parse_prefix(Expr::App(Box::new(Expr::Name(next)), Box::new(Expr::App(Box::new(left), Box::new(Expr::Name(right))))), input)?
+                    }
+                });
+            }
+        }
 
         let order = Context::standard().get_associativity(leftmost(&left), &right, input)?;
 
@@ -102,6 +135,19 @@ pub enum Error {
 pub enum Expr {
     Name(String),
     App(Box<Expr>, Box<Expr>)
+}
+
+/// Displays an expression.
+/// 
+/// `Name` types just return the name, while `App` types return stringified
+/// forms of the arguments, surrounded by paretheses.
+impl Display for Expr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Expr::Name(str) => write!(f, "{}", str),
+            Expr::App(a, b) => write!(f, "({} {})", a, b),
+        }
+    }
 }
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]

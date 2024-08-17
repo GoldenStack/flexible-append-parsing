@@ -18,30 +18,6 @@ pub struct Context {
     infix: HashSet<String>,
 }
 
-impl Default for Context {
-    fn default() -> Self {
-        let mut context = Context::new();
-
-        ["->", "^", "*"]
-            .iter().for_each(|i| context.ra(i));
-
-        context.gt("^", "*");
-        context.gt("*", "+");
-        context.lt("=", "+");
-        context.lt("::", "->");
-        context.lt("=", "$");
-        context.lt("->", "$");
-        context.gt(":", "=");
-        context.gt(":", "::");
-        context.gt("==", "=");
-
-        ["=", "^", "*", "+", ",", "->", "::", "$", ":", "=="]
-            .iter().for_each(|i| context.infix(i));
-
-        context
-    }
-}
-
 impl Context {
 
     pub fn standard() -> &'static Self {
@@ -52,6 +28,8 @@ impl Context {
             // ["->", "^", "*"]
             //     .iter().for_each(|i| context.ra(i));
     
+            context.gt("a", "@");
+            // context.gt(",", "@");
             context.gt(".", "-");
             context.gt("@", ".");
     
@@ -122,25 +100,35 @@ impl Context {
     /// right binds stronger than left, so we use right associativity.
     /// The acyclicity of the graph ensures these conditions are mutually
     /// exclusive.
-    /// 
-    /// If there is no data, [Error::UndefinedAssociativity] is returned.
-    pub fn get_associativity(&self, left: &str, right: &str, input: &&str) -> Result<Associativity> {
+    pub fn get_defined_associativity(&self, left: &str, right: &str) -> Option<Associativity> {
         if left == right {
-            return self.self_referential.get(left).copied()
-                .ok_or_else(|| (input.to_string(), Error::UndefinedAssociativity(left.to_string(), right.to_string())));
+            return self.self_referential.get(left).copied();
+        }
+        let (infix_l, infix_r) = (self.get_ident(left)?, self.get_ident(right)?);
+        
+        if self.path_from(infix_l, infix_r) {
+            Some(Associativity::Left)
+        } else if self.path_from(infix_r, infix_l) {
+            Some(Associativity::Right)
+        } else {
+            None
+        }
+    }
+
+    /// Similar behaviour to Parser::get_defined_associativity except with
+    /// default values: prefix expressions bind stronger than infix expressions,
+    /// prefix operators bind to the left by default, and infix expressions have
+    /// no default associativity.
+    pub fn get_associativity(&self, left: &str, right: &str, input: &&str) -> Result<Associativity> {
+        if let Some(defined) = self.get_defined_associativity(left, right) {
+            return Ok(defined);
         }
 
-        let infix_l = self.get_ident(left)
-            .ok_or_else(|| (input.to_string(), Error::UndefinedAssociativity(left.to_string(), right.to_string())))?;
-        let infix_r = self.get_ident(right)
-            .ok_or_else(|| (input.to_string(), Error::UndefinedAssociativity(left.to_string(), right.to_string())))?;
-
-        if self.path_from(infix_l, infix_r) {
-            Ok(Associativity::Left)
-        } else if self.path_from(infix_r, infix_l) {
-            Ok(Associativity::Right)
-        } else {
-            Err((input.to_string(), Error::UndefinedAssociativity(left.to_string(), right.to_string())))
+        match (self.is_infix(left), self.is_infix(right)) {
+            (true, false) => Ok(Associativity::Right),
+            (false, true) => Ok(Associativity::Left),
+            (false, false) => Ok(Associativity::Left),
+            (true, true) => Err((input.to_string(), Error::UndefinedAssociativity(left.into(), right.into()))),
         }
     }
 
