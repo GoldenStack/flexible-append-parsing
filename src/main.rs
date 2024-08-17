@@ -1,20 +1,45 @@
+use context::Context;
+
+pub mod context;
+
 
 fn main() {
-    println!("Hello, world!");
+    let src = &mut "-a.b";
 
-    let src = &mut "  Hello, world!";
-
-    println!("{:?}", whitespace(src));
-    println!("{}", src);
-    println!("{:?}", token(src));
+    println!("{:?}", parse(src));
 }
 
+/// Returns the value of the leftmost node in an expression. This is possible
+/// because the leftmost node must be an [Expr::Name].
+pub fn leftmost(expr: &Expr) -> &String {
+    match expr {
+        Expr::Name(name) => name,
+        Expr::App(left, _) => leftmost(left)
+    }
+}
 
-pub type Result<T> = std::result::Result<T, (String, Error)>;
+pub fn parse(input: &mut &str) -> Result<Expr> {
+    parse_prefix(token(input).map(Expr::Name)?, input)
+}
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum Error {
-    EOF
+/// Parses prefix expressions (e.g. `a b c`).
+pub fn parse_prefix(mut left: Expr, input: &mut &str) -> Result<Expr> {
+    loop {
+        // If there isn't another token, just exit
+        let Ok(right) = token(input) else {
+            return Ok(left);
+        };
+
+        let order = Context::standard().get_associativity(leftmost(&left), &right, input)?;
+
+        // If it's right associative relative to the left element we pair it
+        // up with the element after it. Otherwise we ignore the element
+        // after and allow following loop iterations to handle it.
+        left = Expr::App(Box::new(left), Box::new(match order {
+                Associativity::Right => parse_prefix(Expr::Name(right), input)?,
+                Associativity::Left => Expr::Name(right)
+        }));
+    }
 }
 
 /// Reads the next `char` from the given string, optionally returning the result.
@@ -65,18 +90,22 @@ pub fn token(src: &mut &str) -> Result<String> {
     return Ok(str);
 }
 
-pub enum Expr {
-    Infix(String, Box<Expr>, Box<Expr>),
-    Prefix(String, Box<Expr>),
-    Literal(String),
+pub type Result<T> = std::result::Result<T, (String, Error)>;
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Error {
+    UndefinedAssociativity(String, String),
+    EOF,
 }
 
-impl Expr {
-    pub fn infix(op: String, left: Expr, right: Expr) -> Self {
-        Expr::Infix(op, Box::new(left), Box::new(right))
-    }
+#[derive(Debug, Eq, PartialEq, Hash)]
+pub enum Expr {
+    Name(String),
+    App(Box<Expr>, Box<Expr>)
+}
 
-    pub fn prefix(op: String, right: Expr) -> Self {
-        Expr::Prefix(op, Box::new(right))
-    }
+#[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
+pub enum Associativity {
+    Left,
+    Right,
 }
