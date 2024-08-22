@@ -6,8 +6,22 @@ pub mod context;
 
 
 fn main() {
-    // let src = &mut "@a,q.b";
-    let src = &mut "@a.b";
+    let src = &mut "@a q.b";
+
+    // @a q.b is (@(a q)).b
+    // -a q.b is -((a q).b)
+    
+    // desired:
+    // (@(a q)).b
+
+    // gt(a, @)
+    // gt(@, .)
+
+
+    // let src = &mut "@a q.b";
+
+    // (- ((. (a q)) b))
+    // (@ ((. (a q)) b))
 
     println!("{}", parse(src).unwrap());
 }
@@ -33,45 +47,43 @@ pub fn parse_prefix(mut left: Expr, input: &mut &str) -> Result<Expr> {
             return Ok(left);
         };
 
-        println!("infix: {} {}", right, Context::standard().is_infix(&right));
-        println!("   left [{}]", left);
-        if let Ok(next) = peek(input, token) {
-            if Context::standard().is_infix(&next) {
-                println!("   next is infix: {} {}", next, Context::standard().is_infix(&next));
-                token(input)?;
-
-                // true faith
-                let new_order = Context::standard().get_associativity(leftmost(&left), &next, input)?;
-
-                // left right next
-
-                println!("beep {} {} {:?}", leftmost(&left), &next, new_order);
-
-                // LEFT: - ((. a) MORE)
-                // RIGHT: (. (- a)) MORE
-
-                return Ok(match new_order {
-                    Associativity::Right => {
-                        Expr::App(Box::new(left), Box::new(
-                            parse_prefix(Expr::App(Box::new(Expr::Name(next)), Box::new(Expr::Name(right))), input)?
-                        ))
-                    },
-                    Associativity::Left => {
-                        parse_prefix(Expr::App(Box::new(Expr::Name(next)), Box::new(Expr::App(Box::new(left), Box::new(Expr::Name(right))))), input)?
-                    }
-                });
+        
+        println!("[1] left: {left}; right: {right}; prec: {:?}", Context::standard().get_associativity(leftmost(&left), &right, input)?);
+        if Context::standard().is_infix(&right) {
+            // at this point it is necessary to steal from the left-hand side
+            println!("[2] branching at {} and {}:", leftmost(&left), &right);
+            match Context::standard().get_associativity(leftmost(&left), &right, input)? {
+                Associativity::Left => {
+                    println!("[3] left after left: {right} {left}");
+                    left = parse_prefix(Expr::Name(right).app(left), input)?;
+                    continue;
+                },
+                Associativity::Right => {
+                    println!("[4] after right: left {left}; right {right}");
+                    left = match left {
+                        Expr::Name(_) => todo!(),
+                        Expr::App(l, r) => l.app(parse_prefix(Expr::Name(right).app(*r), input)?)
+                    };
+                    continue;
+                }
             }
-        }
+        };
 
         let order = Context::standard().get_associativity(leftmost(&left), &right, input)?;
 
+
+        if order == Associativity::Left {
+            println!("[5] {left} applied to {right}; looping because {left} > {right}");
+        } else {
+            println!("[6] parsing with left as {right}, input as /{input}/ because {left} < {right}");
+        }
         // If it's right associative relative to the left element we pair it
         // up with the element after it. Otherwise we ignore the element
         // after and allow following loop iterations to handle it.
-        left = Expr::App(Box::new(left), Box::new(match order {
+        left = left.app(match order {
                 Associativity::Right => parse_prefix(Expr::Name(right), input)?,
                 Associativity::Left => Expr::Name(right)
-        }));
+        });
     }
 }
 
@@ -147,6 +159,12 @@ impl Display for Expr {
             Expr::Name(str) => write!(f, "{}", str),
             Expr::App(a, b) => write!(f, "({} {})", a, b),
         }
+    }
+}
+
+impl Expr {
+    pub fn app(self, right: Expr) -> Self {
+        Expr::App(Box::new(self), Box::new(right))
     }
 }
 

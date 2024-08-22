@@ -29,7 +29,8 @@ impl Context {
             //     .iter().for_each(|i| context.ra(i));
     
             context.gt("a", "@");
-            // context.gt(",", "@");
+            context.gt("a", "-");
+            // context.lt(",", "@");
             context.gt(".", "-");
             context.gt("@", ".");
     
@@ -125,8 +126,8 @@ impl Context {
         }
 
         match (self.is_infix(left), self.is_infix(right)) {
-            (true, false) => Ok(Associativity::Right),
-            (false, true) => Ok(Associativity::Left),
+            (true, false) => Ok(Associativity::Left),
+            (false, true) => Ok(Associativity::Right),
             (false, false) => Ok(Associativity::Left),
             (true, true) => Err((input.to_string(), Error::UndefinedAssociativity(left.into(), right.into()))),
         }
