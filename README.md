@@ -6,7 +6,7 @@ Expression parsing is often implemented with a combination of recursion and loop
 
 I describe an algorithm that allows one to build a correct syntax tree by appending each item consecutively to an existing tree. This has several advantages, including allowing partial parsing of a given token list, as more common parsers store the entire parsing state inside the stack, making it more difficult to manage the state of the current parse. This is likely useful for implementing esolangs like [DreamBerd](https://github.com/TodePond/DreamBerd), but it has more practical uses as well.
 
-[Pratt parsing](https://matklad.github.io/2020/04/13/simple-but-powerful-pratt-parsing.html) (and to an extent [Shunting yard](https://en.wikipedia.org/wiki/Shunting_yard_algorithm)) are, in essence, similar to the algorithm described here, although they are described very differently and only this algorithm does not maintain any state between the addition of multiple tokens except for the syntax tree itself.
+[Pratt parsing](https://matklad.github.io/2020/04/13/simple-but-powerful-pratt-parsing.html) (and to an extent [Shunting yard](https://en.wikipedia.org/wiki/Shunting_yard_algorithm)) are, in essence, similar to the algorithm described here, although they are described very differently and solely this algorithm does not maintain any state between the addition of multiple tokens, except for the syntax tree itself.
 
 Space and time complexity remain `O(n)` with respect to node depth, and only one allocation is required when adding an element (the heap allocation for the new expression application struct, which is required because expressions would otherwise have indeterminate size).
 
