@@ -2,9 +2,11 @@
 
 This project implements what I have been referring to as "append parsing".
 
-Expression parsing is often implemented with a combination of recursion and loops, which parse with right associativity and left associativity, respectively. A combination of the two allows one to implement a function that can parse a list of tokens into a syntax tree that contains each operator in a correct position relative to the other operators in the syntax tree, according to precedence rules.
+Expression parsing is often implemented with a combination of recursion and loops, which parse with right associativity and left associativity, respectively. A combination of the two ([Jonathan Blow](https://www.youtube.com/watch?v=fIPO4G42wYE)) allows one to implement a function that can parse a list of tokens into a syntax tree that contains each operator in a correct position relative to the other operators in the syntax tree, according to precedence rules.
 
-I present an algorithm that allows one to build a correct syntax tree by appending each item consecutively to an existing tree. This has several advantages, including allowing partial parsing of a given token list, as more common parsers store the entire parsing state inside the stack, making it more difficult to manage the state of the current parse.
+I present an algorithm that allows one to build a correct syntax tree by appending each item consecutively to an existing tree. This has several advantages, including allowing partial parsing of a given token list, as more common parsers store the entire parsing state inside the stack, making it more difficult to manage the state of the current parse. This is likely useful for implementing esolangs like [DreamBerd](https://github.com/TodePond/DreamBerd), but it has more practical uses.
+
+Space and time complexity remain `O(n)` with respect to node depth, and only one allocation is required when adding an element (the heap allocation for the new expression application struct, which is required because expressions would otherwise have indeterminate size).
 
 This is only possible because of a few key observations as to where a token can be appended.
 
