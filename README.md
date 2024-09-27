@@ -2,15 +2,19 @@
 
 This project implements what I have been referring to as "append parsing".
 
-Expression parsing is often implemented with a combination of recursion and loops, which parse with right associativity and left associativity, respectively. A combination of the two ([Jonathan Blow](https://www.youtube.com/watch?v=fIPO4G42wYE)) allows one to implement a function that can parse a list of tokens into a syntax tree that contains each operator in a correct position relative to the other operators in the syntax tree, according to precedence rules.
+Expression parsing is often implemented with a combination of recursion and loops, which parse with right associativity and left associativity, respectively. A combination of the two (see [Jonathan Blow](https://www.youtube.com/watch?v=fIPO4G42wYE)'s video) allows one to implement a function that can parse a list of tokens into a syntax tree that contains each operator in a correct position relative to the other operators in the syntax tree, according to precedence rules.
 
-I present an algorithm that allows one to build a correct syntax tree by appending each item consecutively to an existing tree. This has several advantages, including allowing partial parsing of a given token list, as more common parsers store the entire parsing state inside the stack, making it more difficult to manage the state of the current parse. This is likely useful for implementing esolangs like [DreamBerd](https://github.com/TodePond/DreamBerd), but it has more practical uses.
+I describe an algorithm that allows one to build a correct syntax tree by appending each item consecutively to an existing tree. This has several advantages, including allowing partial parsing of a given token list, as more common parsers store the entire parsing state inside the stack, making it more difficult to manage the state of the current parse. This algorithm, on the contrary, does not maintain any state between the addition of multiple tokens except for the syntax tree itself. This is likely useful for implementing esolangs like [DreamBerd](https://github.com/TodePond/DreamBerd), but it has more practical uses as well.
+
+[Pratt parsing](https://matklad.github.io/2020/04/13/simple-but-powerful-pratt-parsing.html) (and to an extent [Shunting yard](https://en.wikipedia.org/wiki/Shunting_yard_algorithm))
 
 Space and time complexity remain `O(n)` with respect to node depth, and only one allocation is required when adding an element (the heap allocation for the new expression application struct, which is required because expressions would otherwise have indeterminate size).
 
 This is only possible because of a few key observations as to where a token can be appended.
 
 First, if syntax is represented as a binary tree, tokens can only be appended (applied to an existing node) on the rightmost nodes in a tree.
+
+> Note: this applies for left-to-right parsing. For parsing in the opposite direction, consider the leftmost nodes.
 
 In parsing the expression `2 * 1 + 3`, consider `2 * 1` to have already been parsed. This represents in the expression `((* 2) 1)` (Lisp-style), which can be visually represented as the following binary tree:
 
