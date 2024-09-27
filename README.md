@@ -1,6 +1,6 @@
-# Append parsing
+# Append-insert parsing
 
-This project implements what I have been referring to as "append parsing".
+This project implements what I have been referring to as "append-insert parsing".
 
 Expression parsing is often implemented with a combination of recursion and loops, which parse with right associativity and left associativity, respectively. A combination of the two (see [Jonathan Blow](https://www.youtube.com/watch?v=fIPO4G42wYE)'s video) allows one to implement a function that can parse a list of tokens into a syntax tree that contains each operator in a correct position relative to the other operators in the syntax tree, according to precedence rules.
 
