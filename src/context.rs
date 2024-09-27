@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet}, sync::OnceLock};
 
 use daggy::{petgraph::{algo::dijkstra, visit::IntoNodeIdentifiers}, Dag, NodeIndex};
 
-use crate::{Associativity, Error, Result};
+use crate::Associativity;
 
 /// Stores context for parsing.
 /// 
@@ -11,7 +11,6 @@ use crate::{Associativity, Error, Result};
 /// all expressions that are infix by default.
 /// 
 /// The context stores static information about parsing.
-/// Cheap, copyable, and dynamic information is stored in the [Reader] instance.
 pub struct Context {
     partial_order: Dag<String, (), u32>,
     self_referential: HashMap<String, Associativity>,
@@ -25,16 +24,12 @@ impl Context {
         LOCK.get_or_init(|| {
             let mut context = Context::new();
 
-            // ["->", "^", "*"]
-            //     .iter().for_each(|i| context.ra(i));
-    
-            context.gt("a", "@");
-            context.gt("a", "-");
-            // context.lt(",", "@");
-            context.gt(".", "-");
-            context.gt("@", ".");
-    
-            ["."]
+            context.gt(":", "#");
+            context.gt("#", ".");
+            context.gt(".", ",");
+            context.gt(",", "@");
+
+            [".", ",", ":"]
                 .iter().for_each(|i| context.infix(i));
     
             context
@@ -86,7 +81,7 @@ impl Context {
     /// first by adding an edge from the second to the first.
     /// 
     /// This has identical semantics to [Context::gt], except with the arguments
-    /// switched.
+    /// swapped.
     pub fn lt(&mut self, first: &str, second: &str) -> bool {
         self.gt(second, first)
     }
@@ -120,16 +115,16 @@ impl Context {
     /// default values: prefix expressions bind stronger than infix expressions,
     /// prefix operators bind to the left by default, and infix expressions have
     /// no default associativity.
-    pub fn get_associativity(&self, left: &str, right: &str, input: &&str) -> Result<Associativity> {
+    pub fn get_associativity(&self, left: &str, right: &str) -> Option<Associativity> {
         if let Some(defined) = self.get_defined_associativity(left, right) {
-            return Ok(defined);
+            return Some(defined);
         }
 
         match (self.is_infix(left), self.is_infix(right)) {
-            (true, false) => Ok(Associativity::Left),
-            (false, true) => Ok(Associativity::Right),
-            (false, false) => Ok(Associativity::Left),
-            (true, true) => Err((input.to_string(), Error::UndefinedAssociativity(left.into(), right.into()))),
+            (true, false) => Some(Associativity::Left),
+            (false, true) => Some(Associativity::Right),
+            (false, false) => Some(Associativity::Left),
+            (true, true) => None,
         }
     }
 

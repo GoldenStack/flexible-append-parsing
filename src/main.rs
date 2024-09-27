@@ -1,29 +1,16 @@
+pub mod context;
+
 use std::fmt::Display;
 
 use context::Context;
 
-pub mod context;
-
-
 fn main() {
-    let src = &mut "@a q.b";
+    let root = parse(&mut "@a,#b:c.q").unwrap();
 
-    // @a q.b is (@(a q)).b
-    // -a q.b is -((a q).b)
-    
-    // desired:
-    // (@(a q)).b
+    println!("{root}");
 
-    // gt(a, @)
-    // gt(@, .)
-
-
-    // let src = &mut "@a q.b";
-
-    // (- ((. (a q)) b))
-    // (@ ((. (a q)) b))
-
-    println!("{}", parse(src).unwrap());
+    println!("(@ ((, a) ((. (# ((: b) c))) q)))");
+    println!("{}", "(@ ((, a) ((. (# ((: b) c))) q)))" == format!("{root}"))
 }
 
 /// Returns the value of the leftmost node in an expression. This is possible
@@ -35,55 +22,87 @@ pub fn leftmost(expr: &Expr) -> &String {
     }
 }
 
-pub fn parse(input: &mut &str) -> Result<Expr> {
-    parse_prefix(token(input).map(Expr::Name)?, input)
+pub fn parse(input: &mut &str) -> Result<Box<Expr>> {
+    let mut base = expr_token(input)?;
+
+    loop {
+        let Ok(next) = expr_token(input) else {
+            return Ok(base);
+        };
+
+        base = append(base, next);
+    }
 }
 
-/// Parses prefix expressions (e.g. `a b c`).
-pub fn parse_prefix(mut left: Expr, input: &mut &str) -> Result<Expr> {
-    loop {
-        // If there isn't another token, just exit
-        let Ok(right) = token(input) else {
-            return Ok(left);
-        };
+fn associativity(a: &Expr, b: &Expr) -> Associativity {
+    Context::standard().get_associativity(&leftmost(a), &leftmost(b)).unwrap()
+}
 
-        
-        println!("[1] left: {left}; right: {right}; prec: {:?}", Context::standard().get_associativity(leftmost(&left), &right, input)?);
-        if Context::standard().is_infix(&right) {
-            // at this point it is necessary to steal from the left-hand side
-            println!("[2] branching at {} and {}:", leftmost(&left), &right);
-            match Context::standard().get_associativity(leftmost(&left), &right, input)? {
-                Associativity::Left => {
-                    println!("[3] left after left: {right} {left}");
-                    left = parse_prefix(Expr::Name(right).app(left), input)?;
-                    continue;
+fn infix(e: &Expr) -> bool {
+    matches!(e, Expr::App(l, _) if matches!(l.as_ref(), Expr::Name(n) if Context::standard().is_infix(&n)))
+}
+
+fn combine(l: Box<Expr>, r: Box<Expr>) -> Box<Expr> {
+    let flip = matches!(r.as_ref(), Expr::Name(t) if Context::standard().is_infix(&t));
+
+    Box::new(if flip {
+        Expr::App(r, l)
+    } else {
+        Expr::App(l, r)
+    })
+}
+
+fn append(base: Box<Expr>, right: Box<Expr>) -> Box<Expr> {
+    match associativity(&base, &right) {
+        Associativity::Left => {
+            let res = append_left(base, right);
+            if let Some(expr) = res.1 {
+                combine(res.0, expr)
+            } else {
+                res.0
+            }
+        },
+        Associativity::Right => append_right(base, right)
+    }
+}
+
+fn append_left(mut base: Box<Expr>, right: Box<Expr>) -> (Box<Expr>, Option<Box<Expr>>) {
+    if infix(&base) {
+        return (combine(base, right), None);
+    }
+
+    match associativity(&base, &right) {
+        Associativity::Left => {
+            match *base {
+                Expr::Name(_) => (combine(base, right), None),
+                Expr::App(l, r) => {
+                    let res = append_left(r, right);
+                    *base = Expr::App(l, res.0);
+                    (base, res.1)
                 },
-                Associativity::Right => {
-                    println!("[4] after right: left {left}; right {right}");
-                    left = match left {
-                        Expr::Name(_) => todo!(),
-                        Expr::App(l, r) => l.app(parse_prefix(Expr::Name(right).app(*r), input)?)
-                    };
-                    continue;
+            }
+        }
+        Associativity::Right => (base, Some(right)),
+    }
+}
+
+fn append_right(mut base: Box<Expr>, right: Box<Expr>) -> Box<Expr> {
+    if infix(&base) {
+        return combine(base, right);
+    }
+
+    match associativity(&base, &right) {
+        Associativity::Left => combine(base, right),
+        Associativity::Right => {
+            match *base {
+                Expr::Name(_) => combine(base, right),
+                Expr::App(l, r) => {
+                    let res = append_right(r, right);
+                    *base = Expr::App(l, res);
+                    base
                 }
             }
-        };
-
-        let order = Context::standard().get_associativity(leftmost(&left), &right, input)?;
-
-
-        if order == Associativity::Left {
-            println!("[5] {left} applied to {right}; looping because {left} > {right}");
-        } else {
-            println!("[6] parsing with left as {right}, input as /{input}/ because {left} < {right}");
         }
-        // If it's right associative relative to the left element we pair it
-        // up with the element after it. Otherwise we ignore the element
-        // after and allow following loop iterations to handle it.
-        left = left.app(match order {
-                Associativity::Right => parse_prefix(Expr::Name(right), input)?,
-                Associativity::Left => Expr::Name(right)
-        });
     }
 }
 
@@ -110,6 +129,10 @@ pub fn whitespace(src: &mut &str) -> Result<()> {
     }
 
     Ok(())
+}
+
+pub fn expr_token(src: &mut &str) -> Result<Box<Expr>> {
+    token(src).map(Expr::Name).map(Box::new)
 }
 
 /// Reads whitespace, and then reads either any number of alphabetic charcters,
@@ -159,12 +182,6 @@ impl Display for Expr {
             Expr::Name(str) => write!(f, "{}", str),
             Expr::App(a, b) => write!(f, "({} {})", a, b),
         }
-    }
-}
-
-impl Expr {
-    pub fn app(self, right: Expr) -> Self {
-        Expr::App(Box::new(self), Box::new(right))
     }
 }
 
